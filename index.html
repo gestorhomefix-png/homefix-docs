@@ -112,6 +112,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .item-vals{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:9px;}
 .item-del{border:none;background:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 6px;border-radius:5px;}
 .item-del:hover{background:#fee2e2;}
+.item-total{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:9px;border-top:1.5px dashed var(--g2);font-size:12px;}
+.item-total span:first-child{color:var(--g6);font-weight:600;text-transform:uppercase;letter-spacing:.4px;font-size:10px;}
+.item-total span:last-child{color:var(--verde);font-weight:800;font-size:15px;}
 
 /* ── FOTOS ── */
 .foto-drop{border:2px dashed var(--g2);border-radius:11px;padding:22px;text-align:center;cursor:pointer;transition:all .12s;background:var(--g1);}
@@ -642,6 +645,7 @@ function renderItens(){
         <div><label class="lb">Mão de obra (R$)</label><input class="fi" placeholder="0,00" value="${it.mdo||''}" oninput="updItem(${idx},'mdo',parseValorMask(this));recalcTotal()"/></div>
         <div><label class="lb">Material (R$)</label><input class="fi" placeholder="0,00" value="${it.mat||''}" oninput="updItem(${idx},'mat',parseValorMask(this));recalcTotal()"/></div>
       </div>
+      <div class="item-total"><span>Total do item</span><span id="item-total-${idx}">${fmtR(parseValor(it.mdo)+parseValor(it.mat))}</span></div>
     </div>`).join('');
 }
 function parseValorMask(el){
@@ -652,7 +656,13 @@ function addItem(){ itensOrc.push({desc:'',obs:'',mdo:'',mat:''}); renderItens()
 function rmItem(i){ itensOrc.splice(i,1); renderItens(); recalcTotal(); rascunhoOrc(); }
 function updItem(i,campo,val){ if(itensOrc[i]){ itensOrc[i][campo]=val; rascunhoOrc(); } }
 function recalcTotal(){
-  const total = itensOrc.reduce((s,it)=>s+parseValor(it.mdo)+parseValor(it.mat),0);
+  let total = 0;
+  itensOrc.forEach((it,idx)=>{
+    const itTotal = parseValor(it.mdo)+parseValor(it.mat);
+    total += itTotal;
+    const el = gi('item-total-'+idx);
+    if(el) el.textContent = fmtR(itTotal);
+  });
   gi('oc-total').textContent = fmtR(total);
 }
 
@@ -1054,27 +1064,46 @@ function gerarPDFOrcamento(d,c){
   const doc=new jsPDFlib({unit:'mm',format:'a4'});
   const PW=210,ML=14,CW=182;
   const VERDE=[55,61,49],TERRA=[146,67,16],CINZA=[107,104,96],CINZAFUNDO=[246,244,240],BRANCO=[255,255,255];
+  // limpa espaços duplicados/grudados nos textos
+  const limpar=t=>(t||'').replace(/\s{2,}/g,' ').replace(/([a-zà-ú])-([A-ZÀ-Ú])/g,'$1 - $2').trim();
   let y=0;
 
-  doc.setFillColor(...VERDE);doc.rect(0,0,PW,30,'F');
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);
-  doc.text('Homefix',ML,13);
-  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(200,210,195);
-  doc.text('SERVIÇOS E MANUTENÇÃO',ML,18.5);
-  doc.setTextColor(150,165,140);
-  doc.text('CNPJ 57.017.878/0001-57  |  (47) 99222-6125  |  www.homefix.com',ML,24);
-  doc.setFillColor(...TERRA);doc.rect(PW-62,5,48,20,'F');
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');
-  doc.setFontSize(9);doc.text('ORÇAMENTO',PW-38,12,{align:'center'});
-  doc.setFontSize(8);doc.text(d.subtipo==='RSC'?'RESCISÃO (RSC)':'MANUTENÇÃO (MNT)',PW-38,17.5,{align:'center'});
-  doc.setFontSize(7);doc.text('Nº '+(d.num||'—'),PW-38,22.5,{align:'center'});
+  function rodape(){
+    doc.setDrawColor(...CINZAFUNDO);doc.setLineWidth(0.3);
+    doc.line(ML,285,PW-ML,285);
+    doc.setTextColor(...VERDE);doc.setFont('helvetica','normal');doc.setFontSize(6.5);
+    doc.text('HomeFix Serviços e Manutenção  |  (47) 99222-6125  |  www.homefix.com  |  Balneário Camboriú - SC',ML,289);
+  }
+  function header(){
+    doc.setFillColor(...VERDE);doc.rect(0,0,PW,30,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(20);
+    doc.text('Homefix',ML,13);
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(200,210,195);
+    doc.text('SERVIÇOS E MANUTENÇÃO',ML,18.5);
+    doc.setTextColor(150,165,140);
+    doc.text('CNPJ 57.017.878/0001-57   |   (47) 99222-6125   |   www.homefix.com',ML,24);
+    doc.setFillColor(...TERRA);doc.rect(PW-62,5,48,20,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');
+    doc.setFontSize(9);doc.text('ORÇAMENTO',PW-38,12,{align:'center'});
+    doc.setFontSize(8);doc.text(d.subtipo==='RSC'?'RESCISÃO (RSC)':'MANUTENÇÃO (MNT)',PW-38,17.5,{align:'center'});
+    doc.setFontSize(7);doc.text('Nº '+(d.num||'—'),PW-38,22.5,{align:'center'});
+  }
+  // cabeçalho de seção com respiro
+  function secao(titulo){
+    if(y>272){doc.addPage();y=16;}
+    doc.setFillColor(...VERDE);doc.rect(ML,y,CW,7.5,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8.5);
+    doc.text('  '+titulo,ML+1,y+5.2);
+    y+=11;
+  }
 
-  y=38;
-  doc.setFillColor(...VERDE);doc.rect(ML,y,CW,7,'F');
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
-  doc.text('  INFORMAÇÕES DO ORÇAMENTO',ML+1,y+5.2);y+=9;
+  header();
+  y=40;
+
+  // ── INFORMAÇÕES ──
+  secao('INFORMAÇÕES DO ORÇAMENTO');
   const info=[
-    ['Imóvel:',d.imovel||'—'],
+    ['Imóvel:',limpar(d.imovel)||'—'],
     [d.subtipo==='RSC'?'Cliente / Locatário:':'Inquilino:',d.cli||'—'],
     ['Contato:',d.cont||'—'],
     ['Imobiliária:',d.imob||'—'],
@@ -1082,107 +1111,111 @@ function gerarPDFOrcamento(d,c){
     ['Data de emissão:',d.dt||'—'],
   ];
   info.forEach((r,i)=>{
-    const wrapped=doc.splitTextToSize(r[1],CW-42);
-    const rowH=Math.max(7,wrapped.length*5+2);
-    doc.setFillColor(...(i%2===0?CINZAFUNDO:BRANCO));doc.rect(ML,y-4.8,CW,rowH,'F');
+    const wrapped=doc.splitTextToSize(r[1],CW-48);
+    const rowH=Math.max(8.5,wrapped.length*5+3.5);
+    doc.setFillColor(...(i%2===0?CINZAFUNDO:BRANCO));doc.rect(ML,y-5,CW,rowH,'F');
     doc.setFont('helvetica','bold');doc.setTextColor(...VERDE);doc.setFontSize(8.5);
-    doc.text(r[0],ML+2,y);
+    doc.text(r[0],ML+3,y);
     doc.setFont('helvetica','normal');doc.setTextColor(...CINZA);
-    doc.text(wrapped,ML+38,y);
+    doc.text(wrapped,ML+44,y);
+    y+=rowH;
+  });
+  y+=7;
+
+  // ── DIAGNÓSTICO ──
+  if(d.diag){
+    secao('DIAGNÓSTICO TÉCNICO');
+    doc.setTextColor(...CINZA);doc.setFont('helvetica','normal');doc.setFontSize(9);
+    const lines=doc.splitTextToSize(limpar(d.diag),CW-10);
+    const h=lines.length*5.4+8;
+    if(y+h>278){doc.addPage();y=16;}
+    doc.setFillColor(...CINZAFUNDO);doc.rect(ML,y,CW,h,'F');
+    doc.text(lines,ML+5,y+7);y+=h+7;
+  }
+
+  // ── ITENS ──
+  const itens=d.itens||[];
+  const total=itens.reduce((s,i)=>s+(parseFloat(i.mdo)||0)+(parseFloat(i.mat)||0),0);
+  secao('ITENS DO ORÇAMENTO');
+  y-=2;
+  // colunas com mais espaço: descrição vai até CW-72, valores espaçados
+  const colMO=CW-58, colMat=CW-30, colTot=CW-2, descW=CW-78;
+  function cabTabela(){
+    doc.setFillColor(...TERRA);doc.rect(ML,y,CW,7,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+    doc.text('Nº',ML+4,y+4.6,{align:'center'});
+    doc.text('Descrição',ML+12,y+4.6);
+    doc.text('M.O.',ML+colMO,y+4.6,{align:'right'});
+    doc.text('Material',ML+colMat,y+4.6,{align:'right'});
+    doc.text('Total',ML+colTot,y+4.6,{align:'right'});
+    y+=7;
+  }
+  cabTabela();
+  itens.forEach((it,idx)=>{
+    const mdo=parseFloat(it.mdo)||0,mat=parseFloat(it.mat)||0,tot=mdo+mat;
+    const wrapped=doc.splitTextToSize(limpar(it.desc)||'—',descW);
+    const rowH=Math.max(8,wrapped.length*4.8+4);
+    if(y+rowH>278){doc.addPage();y=16;cabTabela();}
+    doc.setFillColor(...(idx%2===0?BRANCO:CINZAFUNDO));doc.rect(ML,y,CW,rowH,'F');
+    doc.setTextColor(...TERRA);doc.setFont('helvetica','bold');doc.setFontSize(8);
+    doc.text(String(idx+1).padStart(2,'0'),ML+4,y+5.5,{align:'center'});
+    doc.setTextColor(...CINZA);doc.setFont('helvetica','normal');
+    doc.text(wrapped,ML+12,y+5.5);
+    doc.text(mdo>0?fmtR(mdo):'—',ML+colMO,y+5.5,{align:'right'});
+    doc.text(mat>0?fmtR(mat):'—',ML+colMat,y+5.5,{align:'right'});
+    doc.setFont('helvetica','bold');doc.setTextColor(...VERDE);
+    doc.text(fmtR(tot),ML+colTot,y+5.5,{align:'right'});
     y+=rowH;
   });
   y+=4;
-
-  if(d.diag){
-    doc.setFillColor(...VERDE);doc.rect(ML,y,CW,7,'F');
-    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
-    doc.text('  DIAGNÓSTICO TÉCNICO',ML+1,y+5);y+=9;
-    doc.setTextColor(...CINZA);doc.setFont('helvetica','normal');doc.setFontSize(9);
-    const lines=doc.splitTextToSize(d.diag,CW-8);
-    const h=lines.length*5.2+6;
-    if(y+h>278){doc.addPage();y=15;}
-    doc.setFillColor(...CINZAFUNDO);doc.rect(ML,y,CW,h,'F');
-    doc.text(lines,ML+4,y+6);y+=h+4;
-  }
-
-  const itens=d.itens||[];
-  const total=itens.reduce((s,i)=>s+(parseFloat(i.mdo)||0)+(parseFloat(i.mat)||0),0);
-  doc.setFillColor(...VERDE);doc.rect(ML,y,CW,7,'F');
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
-  doc.text('  ITENS DO ORÇAMENTO',ML+1,y+5);y+=8;
-  doc.setFillColor(...TERRA);doc.rect(ML,y,CW,6,'F');
-  doc.setTextColor(255,255,255);doc.setFontSize(7.5);
-  doc.text('Nº',ML+4,y+4,{align:'center'});doc.text('Descrição',ML+11,y+4);
-  doc.text('M.O.',ML+CW-55,y+4,{align:'right'});doc.text('Material',ML+CW-25,y+4,{align:'right'});doc.text('Total',ML+CW-2,y+4,{align:'right'});y+=6;
-  itens.forEach((it,idx)=>{
-    const mdo=parseFloat(it.mdo)||0,mat=parseFloat(it.mat)||0,tot=mdo+mat;
-    const wrapped=doc.splitTextToSize(it.desc||'—',CW-65);
-    const rowH=Math.max(7,wrapped.length*5+2);
-    if(y+rowH>280){doc.addPage();y=15;}
-    doc.setFillColor(...(idx%2===0?BRANCO:CINZAFUNDO));doc.rect(ML,y,CW,rowH,'F');
-    doc.setTextColor(...TERRA);doc.setFont('helvetica','bold');doc.setFontSize(8);
-    doc.text(String(idx+1).padStart(2,'0'),ML+4,y+4.8,{align:'center'});
-    doc.setTextColor(...CINZA);doc.setFont('helvetica','normal');
-    doc.text(wrapped,ML+11,y+4.8);
-    doc.text(mdo>0?fmtR(mdo):'—',ML+CW-55,y+4.8,{align:'right'});
-    doc.text(mat>0?fmtR(mat):'—',ML+CW-25,y+4.8,{align:'right'});
-    doc.setFont('helvetica','bold');doc.setTextColor(...VERDE);
-    doc.text(fmtR(tot),ML+CW-2,y+4.8,{align:'right'});y+=rowH;
-  });
-  y+=3;
-  doc.setFillColor(...VERDE);doc.rect(ML,y,CW,11,'F');
+  if(y+13>285){doc.addPage();y=16;}
+  doc.setFillColor(...VERDE);doc.rect(ML,y,CW,12,'F');
   doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');
-  doc.setFontSize(9);doc.text('VALOR TOTAL DO ORÇAMENTO',ML+4,y+7.5);
-  doc.setFontSize(12);doc.text(fmtR(total),ML+CW-2,y+7.5,{align:'right'});y+=16;
+  doc.setFontSize(9.5);doc.text('VALOR TOTAL DO ORÇAMENTO',ML+5,y+8);
+  doc.setFontSize(13);doc.text(fmtR(total),ML+CW-3,y+8,{align:'right'});y+=19;
 
-  y+=5;
-  doc.setFillColor(...VERDE);doc.rect(ML,y,CW,7,'F');
-  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
-  doc.text('  CONDIÇÕES DO SERVIÇO',ML+1,y+5);y+=10;
+  // ── CONDIÇÕES ──
+  if(y+34>285){doc.addPage();y=16;}
+  secao('CONDIÇÕES DO SERVIÇO');
   doc.setTextColor(...CINZA);doc.setFont('helvetica','normal');doc.setFontSize(9);
-  doc.text('Prazo de execução: '+(d.prazo||'—'),ML,y);y+=6;
-  doc.text('Garantia: '+(d.gar||'—'),ML,y);y+=6;
-  doc.text('Pagamento: '+(d.pgto||'—'),ML,y);y+=10;
+  doc.text('Prazo de execução:  '+(d.prazo||'—'),ML+2,y);y+=7;
+  doc.text('Garantia:  '+(d.gar||'—'),ML+2,y);y+=7;
+  doc.text('Pagamento:  '+(d.pgto||'—'),ML+2,y);y+=12;
 
+  // ── OBSERVAÇÕES ──
   if(d.obs){
-    doc.setFillColor(...VERDE);doc.rect(ML,y,CW,7,'F');
-    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
-    doc.text('  OBSERVAÇÕES GERAIS',ML+1,y+5);y+=9;
+    secao('OBSERVAÇÕES GERAIS');
     doc.setFont('helvetica','normal');doc.setFontSize(9);
-    const lines=doc.splitTextToSize(d.obs,CW-8);
-    const h=lines.length*5.2+6;
-    if(y+h>278){doc.addPage();y=15;}
+    const lines=doc.splitTextToSize(limpar(d.obs),CW-10);
+    const h=lines.length*5.4+8;
+    if(y+h>278){doc.addPage();y=16;}
     doc.setFillColor(...CINZAFUNDO);doc.rect(ML,y,CW,h,'F');
-    doc.setTextColor(...CINZA);doc.text(lines,ML+4,y+6);y+=h+5;
+    doc.setTextColor(...CINZA);doc.text(lines,ML+5,y+7);y+=h+8;
   }
 
+  // ── FOTOS ──
   if(d.fotosAntes&&d.fotosAntes.length){
-    if(y>250){doc.addPage();y=15;}
-    doc.setFillColor(...VERDE);doc.rect(ML,y,CW,7,'F');
-    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(8);
-    doc.text('  FOTOS DO IMÓVEL',ML+1,y+5);y+=10;
-    const w=55,h=42,gap=6;let x=ML;
+    if(y>240){doc.addPage();y=16;}
+    secao('FOTOS DO IMÓVEL');
+    const w=55,h=42,gap=7;let x=ML;
     d.fotosAntes.forEach(f=>{
       if(x+w>ML+CW){x=ML;y+=h+gap;}
-      if(y+h>280){doc.addPage();y=15;x=ML;}
+      if(y+h>278){doc.addPage();y=16;x=ML;}
       try{doc.addImage(f,'JPEG',x,y,w,h);}catch(e){}
       doc.setDrawColor(...CINZAFUNDO);doc.rect(x,y,w,h);
       x+=w+gap;
     });
-    y+=h+10;
+    y+=h+12;
   }
 
-  if(y>270){doc.addPage();y=20;}
+  // ── ASSINATURA ──
+  if(y>262){doc.addPage();y=20;}
   doc.setFont('helvetica','bold');doc.setTextColor(...VERDE);doc.setFontSize(10);
   doc.text('Conrado',ML,y);
   doc.setFont('helvetica','normal');doc.setTextColor(...CINZA);doc.setFontSize(8);
-  doc.text('HomeFix Serviços e Manutenção  |  CNPJ 57.017.878/0001-57',ML,y+5.5);
+  doc.text('HomeFix Serviços e Manutenção   |   CNPJ 57.017.878/0001-57',ML,y+6);
 
-  doc.setDrawColor(...CINZAFUNDO);doc.setLineWidth(0.3);
-  doc.line(ML,285,PW-ML,285);
-  doc.setTextColor(...VERDE);doc.setFont('helvetica','normal');doc.setFontSize(6.5);
-  doc.text('HomeFix Serviços e Manutenção  |  (47) 99222-6125  |  www.homefix.com  |  Balneário Camboriú - SC',ML,289);
-
+  rodape();
   doc.save('ORÇAMENTO '+(d.num||'').toUpperCase()+'.pdf');
   toast('PDF do Orçamento gerado!');
 }
