@@ -308,6 +308,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div class="fl" style="margin:0"><textarea class="ft" id="lv-prob" placeholder="Descreva os problemas encontrados..." oninput="rascunhoLv()"></textarea></div>
     <div class="fsect">Conclusão</div>
     <div class="fl" style="margin:0"><textarea class="ft" id="lv-conc" placeholder="Conclusão da visita técnica..." oninput="rascunhoLv()"></textarea></div>
+    <div class="fsect">Fotos da Visita</div>
+    <div class="foto-drop" onclick="gi('lv-foto-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="dropFotoLv(event)">
+      <div style="font-size:28px;margin-bottom:4px">📷</div>
+      <div style="font-size:12px;font-weight:700;color:var(--g6)">Clique ou arraste fotos aqui</div>
+      <div style="font-size:10px;color:var(--g4);margin-top:2px">Aparecem no PDF do laudo</div>
+    </div>
+    <input type="file" id="lv-foto-input" accept="image/*" multiple style="display:none" onchange="addFotoLv(event)"/>
+    <div class="foto-grid" id="lv-foto-grid"></div>
   </div>
   <div class="mof">
     <span class="draft-ind" id="lv-draft-ind"></span>
@@ -440,7 +448,7 @@ let orcSeq = 1, lauSeq = 1, recSeq = 1;
 let orcAtualId = null, lauAtualId = null, lauAtualTipo = null, recAtualId = null;
 let orcTipo = 'MNT', lpTipo = 'MNT', _recFP = '';
 let itensOrc = [];
-let fotosOrc = [], fotosLpAntes = [], fotosLpDepois = [];
+let fotosOrc = [], fotosLpAntes = [], fotosLpDepois = [], fotosLv = [];
 
 const LP_CHECK_MNT = ['Serviço realizado','Danos reparados','Local organizado','Informações passadas ao locatário'];
 const LP_CHECK_RSC = ['Vistoria concluída','Itens conferidos','Relatório registrado','Chaves/entrega resolvidas'];
@@ -674,6 +682,13 @@ function renderFotosOrc(){
   gi('oc-foto-grid').innerHTML = fotosOrc.map((f,i)=>`<div class="foto-item"><img src="${f}"/><button class="foto-rm" onclick="fotosOrc.splice(${i},1);renderFotosOrc();rascunhoOrc()">✕</button></div>`).join('');
 }
 
+/* Fotos do laudo de visita */
+function addFotoLv(e){ [...e.target.files].forEach(f=>lerFoto(f,d=>{fotosLv.push(d);renderFotosLv();rascunhoLv();})); e.target.value=''; }
+function dropFotoLv(e){ e.preventDefault(); e.currentTarget.classList.remove('drag'); [...e.dataTransfer.files].forEach(f=>{ if(f.type.startsWith('image/')) lerFoto(f,d=>{fotosLv.push(d);renderFotosLv();rascunhoLv();}); }); }
+function renderFotosLv(){
+  gi('lv-foto-grid').innerHTML = fotosLv.map((f,i)=>`<div class="foto-item"><img src="${f}"/><button class="foto-rm" onclick="fotosLv.splice(${i},1);renderFotosLv();rascunhoLv()">✕</button></div>`).join('');
+}
+
 function abrirOrc(){
   orcAtualId = null; itensOrc = [{desc:'',obs:'',mdo:'',mat:''}]; fotosOrc = [];
   gi('orc-title').textContent = 'Novo Orçamento';
@@ -833,6 +848,7 @@ function abrirLaudo(tipo){
     gi('lv-title').textContent = 'Laudo de Visita';
     ['lv-numimov','lv-predio','lv-end','lv-nome','lv-tel','lv-imob','lv-resp','lv-tec','lv-prob','lv-conc'].forEach(i=>sv(i,''));
     sv('lv-data', hojeISO());
+    fotosLv=[]; renderFotosLv();
     gi('lv-draft-ind').textContent='';
     abrirModal('m-lv');
   } else {
@@ -855,6 +871,7 @@ function editarLaudo(id){
     sv('lv-numimov',l.numimov);sv('lv-predio',l.predio);sv('lv-end',l.end);
     sv('lv-nome',l.nome);sv('lv-tel',l.tel);sv('lv-imob',l.imob);sv('lv-resp',l.resp);
     sv('lv-data',l.data||hojeISO());sv('lv-tec',l.tec);sv('lv-prob',l.prob);sv('lv-conc',l.conc);
+    fotosLv=(l.fotos||[]).slice(); renderFotosLv();
     gi('lv-draft-ind').textContent='';
     abrirModal('m-lv');
   } else {
@@ -879,6 +896,7 @@ function coletarLv(){
     tipo:'lv', numimov:gv('lv-numimov'),predio:gv('lv-predio'),end:gv('lv-end'),
     nome:gv('lv-nome'),tel:gv('lv-tel'),imob:gv('lv-imob'),resp:gv('lv-resp'),
     data:gv('lv-data'),tec:gv('lv-tec'),prob:gv('lv-prob'),conc:gv('lv-conc'),
+    fotos: fotosLv.slice(),
     snapshot, dt: gv('lv-data')?fmtDataBR(gv('lv-data')):hojeBR()
   };
 }
@@ -942,6 +960,7 @@ function verLaudo(id){
   if(l.tipo==='lv'){
     body += `<div class="dview-sect"><div class="dview-t">Problemas Identificados</div><div class="dview-row">${l.prob||'—'}</div></div>
              <div class="dview-sect"><div class="dview-t">Conclusão</div><div class="dview-row">${l.conc||'—'}</div></div>`;
+    if(l.fotos && l.fotos.length) body += `<div class="dview-sect"><div class="dview-t">Fotos (${l.fotos.length})</div><div class="foto-grid">${l.fotos.map(f=>`<div class="foto-item"><img src="${f}"/></div>`).join('')}</div></div>`;
   } else {
     if(l.subtipo!=='RSC' && l.problema) body += `<div class="dview-sect"><div class="dview-t">Problema</div><div class="dview-row">${l.problema}</div></div>`;
     body += `<div class="dview-sect"><div class="dview-t">${l.subtipo==='RSC'?'Serviços Executados':'Solução Aplicada'}</div><div class="dview-row">${l.serv||'—'}</div></div>`;
@@ -1415,6 +1434,21 @@ function gerarPDFLaudoVisita(d,c){
 
   sectionHeader('CONCLUSÃO');
   textBlock(d.conc);
+
+  // FOTOS
+  if(d.fotos && d.fotos.length){
+    if(y>240){doc.addPage();y=16;}
+    sectionHeader('FOTOS DA VISITA');
+    const w=55,h=42,gap=7;let x=ML;
+    d.fotos.forEach(f=>{
+      if(x+w>ML+CW){x=ML;y+=h+gap;}
+      if(y+h>278){doc.addPage();y=16;x=ML;}
+      try{doc.addImage(f,'JPEG',x,y,w,h);}catch(e){}
+      doc.setDrawColor(...CINZAFUNDO);doc.rect(x,y,w,h);
+      x+=w+gap;
+    });
+    y+=h+10;
+  }
 
   doc.setDrawColor(...CINZAFUNDO);doc.setLineWidth(0.3);
   doc.line(ML,285,PW-ML,285);
