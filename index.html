@@ -677,7 +677,34 @@ function recalcTotal(){
 /* Fotos do orçamento */
 function addFotoOrc(e){ [...e.target.files].forEach(f=>lerFoto(f,d=>{fotosOrc.push(d);renderFotosOrc();rascunhoOrc();})); e.target.value=''; }
 function dropFotoOrc(e){ e.preventDefault(); e.currentTarget.classList.remove('drag'); [...e.dataTransfer.files].forEach(f=>{ if(f.type.startsWith('image/')) lerFoto(f,d=>{fotosOrc.push(d);renderFotosOrc();rascunhoOrc();}); }); }
-function lerFoto(file, cb){ const r=new FileReader(); r.onload=ev=>cb(ev.target.result); r.readAsDataURL(file); }
+function lerFoto(file, cb){
+  // Comprime e redimensiona a foto antes de guardar — deixa o PDF e a nuvem muito mais leves
+  // sem perda visível de qualidade. Foto de celular (vários MB) vira ~150-300 KB.
+  const r = new FileReader();
+  r.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const MAX = 1200; // largura/altura máxima em pixels
+        let w = img.width, h = img.height;
+        if (w > h && w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+        else if (h >= w && h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0,0,w,h); // fundo branco (evita preto em PNG transparente)
+        ctx.drawImage(img, 0, 0, w, h);
+        const comprimida = canvas.toDataURL('image/jpeg', 0.7); // qualidade 70%
+        cb(comprimida);
+      } catch(e) {
+        cb(ev.target.result); // se algo falhar, usa a original
+      }
+    };
+    img.onerror = () => cb(ev.target.result);
+    img.src = ev.target.result;
+  };
+  r.readAsDataURL(file);
+}
 function renderFotosOrc(){
   gi('oc-foto-grid').innerHTML = fotosOrc.map((f,i)=>`<div class="foto-item"><img src="${f}"/><button class="foto-rm" onclick="fotosOrc.splice(${i},1);renderFotosOrc();rascunhoOrc()">✕</button></div>`).join('');
 }
